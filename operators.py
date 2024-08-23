@@ -37,7 +37,7 @@ class SlurmOperator(BaseOperator):
 
         self.start_time = time.time()
         result = subprocess.run(['sbatch', batch_script_file], capture_output=True, text=True)
-
+        self.job_active = True
         os.remove(batch_script_file)
 
         if result.returncode != 0:
@@ -50,8 +50,10 @@ class SlurmOperator(BaseOperator):
         self.err_path = f'{self.log_path}/{self.job_id}_slurm.err'
 
     def monitor_slurm_job(self):
-        while time.time() - self.start_time < self.timeout:
-            command = f"squeue -j {self.job_id}"
+        while self.job_active:
+            time.sleep(self.poke_interval)
+
+            command = f"squeue -h -j {self.job_id} -o '%T'"
             result = subprocess.run(command, shell=True, capture_output=True, text=True)
 
             if result.returncode != 0:
@@ -60,17 +62,14 @@ class SlurmOperator(BaseOperator):
             
             self.log_slurm()
 
-            if self.job_id in result.stdout:
-                self.log.info(f"Job ID {self.job_id} is still running")
+            job_state = result.stdout.strip()
+
+            if job_state:
+                self.log.info(f"Job ID {self.job_id} is currently in state: {job_state}")
             else:
-                self.log.info(f"Job ID {self.job_id} has completed")
-                return
+                self.log.info(f"Job ID {self.job_id} is no longer in the queue (likely completed)")
+                self.job_active = False
         
-            time.sleep(self.poke_interval)
-
-        self.log.error(f"Slurm job {self.job_id} timed out.")
-        raise Exception(f"Slurm job {self.job_id} timed out.")
-
     def log_slurm(self):
         if os.path.exists(self.out_path):
             with open(self.out_path, 'r') as f:
@@ -91,3 +90,14 @@ class SlurmOperator(BaseOperator):
         self.monitor_slurm_job()
 
         return self.job_id
+    
+    def on_kill(self):
+        if self.job_id:
+            self.log.info(f"Cancelling Slurm job with ID: {self.job_id}")
+            cancel_command = f"scancel {self.job_id}"
+            result = subprocess.run(cancel_command, shell=True, capture_output=True, text=True)
+            if result.returncode != 0:
+                self.log.error(f"Failed to cancel Slurm job: {result.stderr}")
+            else:
+                self.log.info(f"Slurm job {self.job_id} canceled successfully.")
+
