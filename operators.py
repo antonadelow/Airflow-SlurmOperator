@@ -25,10 +25,16 @@ class SlurmOperator(BaseOperator):
         "",
         f". {conda_path}",
         f"conda activate {env}",
-        f"PYTHONUNBUFFERED=1 python3 {script} {' '.join(script_args)}"
+        f"PYTHONUNBUFFERED=1 python3 {script} {self.unparse_args(script_args)}"
         ]
         self.log_tracker = [0,0]
 
+    def unparse_args(self, args):
+        args_string = ""
+        for key, value in args.items():
+                args_string += f" {key}=\"{str(value).replace(" ","").replace("[","").replace("]","")}\""
+        return args_string
+    
     def submit_slurm_job(self):
         batch_script_file = f'{os.path.dirname(os.path.abspath(__file__))}/{self.dag.dag_display_name}_{self.task_id}.sbatch'
         with open(batch_script_file, 'w') as f:
@@ -76,14 +82,14 @@ class SlurmOperator(BaseOperator):
                 for i, line in enumerate(f):
                     if i >= self.log_tracker[0]:
                         self.log.info(f"Slurm Output: {line.strip()}")
-                self.log_tracker[0] = i+1
+                        self.log_tracker[0] = i+1
 
         if os.path.exists(self.err_path):
             with open(self.err_path, 'r') as f:
                 for i, line in enumerate(f):
                     if i >= self.log_tracker[1]:
                         self.log.error(f"Slurm Error: {line.strip()}")
-                self.log_tracker[1] = i+1
+                        self.log_tracker[1] = i+1
 
     def execute(self, context):
         self.submit_slurm_job()
@@ -100,4 +106,3 @@ class SlurmOperator(BaseOperator):
                 self.log.error(f"Failed to cancel Slurm job: {result.stderr}")
             else:
                 self.log.info(f"Slurm job {self.job_id} canceled successfully.")
-
