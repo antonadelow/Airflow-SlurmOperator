@@ -46,7 +46,7 @@ slurm_task = SlurmOperator(
 - **conda_path** (`str`): Path to the Conda initialization script (e.g., `/path/to/conda.sh`).
 - **env** (`str`): Name of the Conda environment to activate.
 - **log_path** (`str`): Directory where SLURM output and error logs will be stored.
-- **script_args** (`list`, optional): List of arguments to pass to the script.
+- **script_args** (`dict`, optional): Arguments to pass to the script.
 - **mem_per_cpu** (`str`, optional): Memory allocated per CPU (e.g., '4600M').
 - **cpus_per_task** (`int`, optional): Number of CPUs allocated per task.
 - **num_gpus** (`int`, optional): Number of GPUs required for the task.
